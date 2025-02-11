@@ -2,7 +2,7 @@
 
 Collection of financial tools
 
-### market_watch.rb
+## market_watch.rb
 
 Automates market monitoring, making financial tracking seamless and efficient. 🚀
 
@@ -20,10 +20,10 @@ Tracking data:
 - 📊 **US10Y**
 - ⛽ **Brent Oil**
 
-### stock_prices.py
+## stock_prices.py
 
 Fetches historical stock prices 📊
 
-### data_analytics.py
+## data_analytics.py
 
 Correlation Matrix Calculation 🔢 🔗
