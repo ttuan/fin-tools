@@ -24,6 +24,8 @@ Tracking data:
 
 Fetches historical stock prices 📊
 
+I use this script to get historical stock prices to calculate `beta`, `correlation`, `covariance`, `standard devitation`, ... for my portfolio.
+
 ## data_analytics.py
 
 Correlation Matrix Calculation 🔢 🔗
