@@ -78,7 +78,12 @@ class FinancialDataFetcher
   def convert_to_vnd_billion(amount)
     billion_vnd = amount.to_f / 1_000_000_000
     formatted = format('%.2f', billion_vnd)
-    "#{formatted} tỷ"
+
+    if billion_vnd >= 1000
+      "#{(formatted.split('.')[0].to_f / 1000).round(2)} nghìn tỷ"
+    else
+      "#{formatted} tỷ"
+    end
   end
 end
 
