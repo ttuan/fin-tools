@@ -31,7 +31,7 @@ URLS = {
   "VN10Y" => "https://tradingeconomics.com/vietnam/government-bond-yield",
   "Brent Oil" => "https://tradingeconomics.com/commodity/brent-crude-oil",
   "Gold Price" => "https://tradingeconomics.com/commodity/gold",
-  "VN Gold Prices" => "https://doji.vn/bang-gia-vang/",
+  "VN Gold Prices" => "http://giavang.doji.vn/",
   "GD NDT NN" => "https://cafef.vn/du-lieu/tracuulichsu2/3/hose/#{Date.today.strftime("%d/%m/%Y")}.chn",
   "VNINDEX" => "https://dstock.vndirect.com.vn/",
   "DXY" => "https://tradingeconomics.com/united-states/currency",
@@ -183,14 +183,20 @@ class VietnamGoldFetcher < FinancialDataFetcher
     return nil unless soup
 
     prices = []
-    taxonomy_blocks = soup.css("._taxonomy ._block")
-    sell_blocks = soup.css("._Sell ._block")
-
-    taxonomy_blocks.each_with_index do |block, index|
-      if block.text.include?("SJC HN - Bán Lẻ")
-        prices << "SJC HN - Bán Lẻ: `#{sell_blocks[index].text.strip}`"
-      elsif block.text.include?("Nhẫn Tròn 9999")
-        prices << "Nhẫn Tròn 9999: `#{sell_blocks[index].text.strip}`"
+    
+    # Find the gold price table
+    table = soup.at_css('#bang-gia-theo-vung-mien .hn table.goldprice-view')
+    return "No gold price table found." unless table
+    
+    # Process rows in the table
+    table.css('tbody tr').each do |row|
+      label = row.at_css('td.label')&.text&.strip
+      sell_price = row.css('td')[2]&.text&.strip
+      
+      if label == "SJC - Bán Lẻ"
+        prices << "SJC - Bán Lẻ: `#{sell_price}`"
+      elsif label == "Nhẫn Tròn 9999 Hưng Thịnh Vượng - Bán Lẻ"
+        prices << "Nhẫn Tròn 9999 Hưng Thịnh Vượng - Bán Lẻ: `#{sell_price}`"
       end
       break if prices.size == 2
     end
