@@ -183,16 +183,16 @@ class VietnamGoldFetcher < FinancialDataFetcher
     return nil unless soup
 
     prices = []
-    
+
     # Find the gold price table
     table = soup.at_css('#bang-gia-theo-vung-mien .hn table.goldprice-view')
     return "No gold price table found." unless table
-    
+
     # Process rows in the table
     table.css('tbody tr').each do |row|
       label = row.at_css('td.label')&.text&.strip
       sell_price = row.css('td')[2]&.text&.strip
-      
+
       if label == "SJC - Bán Lẻ"
         prices << "SJC - Bán Lẻ: `#{sell_price}`"
       elsif label == "Nhẫn Tròn 9999 Hưng Thịnh Vượng - Bán Lẻ"
@@ -260,7 +260,7 @@ class SlackNotifier
     @channel = channel
   end
 
-  def send_message(data)
+  def send_message(data, thread_ts: nil)
     today_date = Time.now.strftime("%Y-%m-%d %H:%M")
     blocks = [{ type: "section", text: { type: "mrkdwn", text: "*Market Update - #{today_date}*" } }]
 
@@ -285,11 +285,40 @@ class SlackNotifier
       blocks << { type: "divider" } if label == "VN Gold Prices" or label == "VNINDEX"
     end
 
-    @client.chat_postMessage(channel: @channel, blocks: blocks)
+    params = { channel: @channel, blocks: blocks }
+    params[:thread_ts] = thread_ts if thread_ts
+    response = @client.chat_postMessage(**params)
     puts "Slack message sent successfully."
+    response["ts"]
   rescue Slack::Web::Api::Errors::SlackError => e
     puts "Error sending Slack message: #{e.message}"
+    nil
   end
+
+  def send_title_only
+    today_date = morning_run? ? Time.now.strftime("%Y-%m-%d") : Time.now.strftime("%Y-%m-%d %H:%M")
+    blocks = [{ type: "section", text: { type: "mrkdwn", text: "*Market Watch - #{today_date}*" } }]
+    params = { channel: @channel, blocks: blocks }
+    response = @client.chat_postMessage(**params)
+    puts "Slack title message sent successfully."
+    response["ts"]
+  end
+end
+
+# Helper methods for thread_ts file
+THREAD_FILE = ".market_watch_thread"
+
+def save_thread_ts(ts)
+  File.write(THREAD_FILE, ts)
+end
+
+def read_thread_ts
+  File.exist?(THREAD_FILE) ? File.read(THREAD_FILE).strip : nil
+end
+
+def morning_run?
+  now = Time.now
+  now.hour == 8 && now.min < 40 # allow a 10-min window for cron
 end
 
 def fetch_concurrently(fetchers)
@@ -316,9 +345,22 @@ def run_market_update(slack_token, slack_channel)
   }
 
   market_data = fetch_concurrently(fetchers)
-
   slack_notifier = SlackNotifier.new(slack_token, slack_channel)
-  slack_notifier.send_message(market_data)
+
+  if morning_run?
+    ts = slack_notifier.send_title_only
+    save_thread_ts(ts) if ts
+    slack_notifier.send_message(market_data, thread_ts: ts)
+  else
+    thread_ts = read_thread_ts
+    if thread_ts
+      slack_notifier.send_message(market_data, thread_ts: thread_ts)
+    else
+      ts = slack_notifier.send_title_only
+      save_thread_ts(ts) if ts
+      slack_notifier.send_message(market_data, thread_ts: ts)
+    end
+  end
 end
 
 run_market_update(SLACK_TOKEN, SLACK_CHANNEL)
