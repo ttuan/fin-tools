@@ -220,7 +220,7 @@ class VnindexFetcher < FinancialDataFetcher
     return nil unless data
 
     close = data["close"]
-    change = data["change"]
+    change = data["change"].round(2)
     volume = convert_to_vnd_billion(data["accumulatedVal"])
     date_time = "#{data['date']} #{data['time']}"
     parsed_date_time = DateTime.parse(date_time).strftime("%d/%m %H:%M")
