@@ -21,6 +21,7 @@ ICONS = {
   "Gold Price" => "🥇",
   "GD NDT NN" => "🌍",
   "VNINDEX" => "🇻🇳",
+  "VNINDEX P/E" => "📈",
   "VN Gold Prices" => "🏅",
   "Brent Oil" => "⛽",
   "ON" => "📰"
@@ -34,6 +35,7 @@ URLS = {
   "VN Gold Prices" => "http://giavang.doji.vn/",
   "GD NDT NN" => "https://cafef.vn/du-lieu/tracuulichsu2/3/hose/#{Date.today.strftime("%d/%m/%Y")}.chn",
   "VNINDEX" => "https://dstock.vndirect.com.vn/",
+  "VNINDEX P/E" => "https://etrade.tcsc.vn/tci/analytic-tool",
   "DXY" => "https://tradingeconomics.com/united-states/currency",
   "VN1Y" => "https://vn.investing.com/rates-bonds/vietnam-1-year-bond-yield-streaming-chart",
   "USDVND" => "https://tradingeconomics.com/usdvnd:cur",
@@ -229,6 +231,56 @@ class VnindexFetcher < FinancialDataFetcher
   end
 end
 
+class VnindexPEFetcher < FinancialDataFetcher
+  def fetch_data
+    @url = "https://wl-market.fiintrade.vn/MarketInDepth/GetValuationSeriesV2?language=vi&Code=VNINDEX&TimeRange=ThreeYears&FromDate=&ToDate="
+
+    headers = HEADERS.merge({
+      'Accept' => 'application/json',
+      'Accept-Language' => 'en,vi;q=0.9,ja;q=0.8',
+      'Connection' => 'keep-alive',
+      'Content-Type' => 'application/json',
+      'Origin' => 'https://etrade.tcsc.vn',
+      'Referer' => 'https://etrade.tcsc.vn/',
+      'Sec-Fetch-Dest' => 'empty',
+      'Sec-Fetch-Mode' => 'cors',
+      'Sec-Fetch-Site' => 'cross-site',
+      'X-Fiin-Key' => 'KEY',
+      'X-Fiin-Seed' => 'SEED',
+      'X-Fiin-User-ID' => 'ID',
+      'sec-ch-ua' => '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+      'sec-ch-ua-mobile' => '?0',
+      'sec-ch-ua-platform' => '"macOS"'
+    })
+
+    uri = URI.parse(@url)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = (uri.scheme == "https")
+
+    request = Net::HTTP::Get.new(uri.request_uri, headers)
+    response = http.request(request)
+
+    return nil unless response.is_a?(Net::HTTPSuccess)
+
+    response_json = JSON.parse(response.body)
+    items = response_json["items"]
+
+    return nil unless items && items.any?
+
+    # Get the last (most recent) item
+    latest_item = items.last
+    pe_ratio = latest_item["r21"]&.round(2)
+    trading_date = Date.parse(latest_item["tradingDate"]).strftime("%d/%m")
+
+    return nil unless pe_ratio
+
+    "`#{pe_ratio}` (#{trading_date})"
+  rescue StandardError => e
+    puts "Error fetching VNINDEX P/E: #{e}"
+    nil
+  end
+end
+
 class ForeignTransactionFetcher < FinancialDataFetcher
   def fetch_data
     today = Date.today.strftime("%m/%d/%Y")
@@ -282,7 +334,7 @@ class SlackNotifier
         }
       end
 
-      blocks << { type: "divider" } if label == "VN Gold Prices" or label == "VNINDEX"
+      blocks << { type: "divider" } if label == "VN Gold Prices" or label == "VNINDEX P/E"
     end
 
     params = { channel: @channel, blocks: blocks }
@@ -338,6 +390,7 @@ def run_market_update(slack_token, slack_channel)
     "VN Gold Prices" => VietnamGoldFetcher.new(URLS["VN Gold Prices"]),
     "GD NDT NN" => ForeignTransactionFetcher.new(URLS["GD NDT NN"]),
     "VNINDEX" => VnindexFetcher.new(URLS["VNINDEX"]),
+    "VNINDEX P/E" => VnindexPEFetcher.new(URLS["VNINDEX P/E"]),
     "DXY" => TradingEconomicsFetcher.new(URLS["DXY"], "DXY:CUR"),
     "VN1Y" => Vietnam1YBondFetcher.new(URLS["VN1Y"]),
     "USDVND" => TradingEconomicsFetcher.new(URLS["USDVND"], "USDVND:CUR"),
