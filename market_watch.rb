@@ -20,6 +20,7 @@ ICONS = {
   "DXY" => "💰",
   "Gold Price" => "🥇",
   "GD NDT NN" => "🌍",
+  "Tự doanh" => "🏢",
   "VNINDEX" => "🇻🇳",
   "VNINDEX P/E" => "📈",
   "VN Gold Prices" => "🏅",
@@ -34,6 +35,7 @@ URLS = {
   "Gold Price" => "https://tradingeconomics.com/commodity/gold",
   "VN Gold Prices" => "http://giavang.doji.vn/",
   "GD NDT NN" => "https://cafef.vn/du-lieu/tracuulichsu2/3/hose/#{Date.today.strftime("%d/%m/%Y")}.chn",
+  "Tự doanh" => "https://dstock.vndirect.com.vn/",
   "VNINDEX" => "https://dstock.vndirect.com.vn/",
   "VNINDEX P/E" => "https://etrade.tcsc.vn/tci/analytic-tool",
   "DXY" => "https://tradingeconomics.com/united-states/currency",
@@ -283,25 +285,147 @@ end
 
 class ForeignTransactionFetcher < FinancialDataFetcher
   def fetch_data
-    today = Date.today.strftime("%m/%d/%Y")
-    @url = "https://cafef.vn/du-lieu/Ajax/PageNew/DataGDNN/GDNuocNgoai.ashx?TradeCenter=HOSE&Date=#{today}"
+    # Get current date in YYYY-MM-DD format
+    current_date = Date.today.strftime("%Y-%m-%d")
+
+    # Build the API URL
+    @url = "https://api-finfo.vndirect.com.vn/v4/foreigns?q=code:STOCK_HNX,STOCK_UPCOM,STOCK_HOSE,ETF_HOSE,IFC_HOSE&sort=tradingDate&size=500"
+
+    headers = HEADERS.merge({
+      'Accept' => '*/*',
+      'Accept-Language' => 'en,vi;q=0.9,ja;q=0.8',
+      'Connection' => 'keep-alive',
+      'Content-Type' => 'application/json',
+      'Origin' => 'https://dstock.vndirect.com.vn',
+      'Referer' => 'https://dstock.vndirect.com.vn/',
+      'Sec-Fetch-Dest' => 'empty',
+      'Sec-Fetch-Mode' => 'cors',
+      'Sec-Fetch-Site' => 'same-site',
+      'sec-ch-ua' => '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+      'sec-ch-ua-mobile' => '?0',
+      'sec-ch-ua-platform' => '"macOS"'
+    })
 
     uri = URI.parse(@url)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = (uri.scheme == "https")
 
-    request = Net::HTTP::Get.new(uri.request_uri, HEADERS)
+    request = Net::HTTP::Get.new(uri.request_uri, headers)
     response = http.request(request)
+
+    return nil unless response.is_a?(Net::HTTPSuccess)
+
     response_json = JSON.parse(response.body)
-    data = response_json["Data"]
+    data = response_json["data"]
 
-    buy_value = convert_to_vnd_billion(data["BuyValue"])
-    sell_value = convert_to_vnd_billion(data["SellValue"])
-    diff_value = convert_to_vnd_billion(data["DiffValue"])
+    return nil unless data && data.any?
 
-    return nil if buy_value == "0.00 tỷ" && sell_value == "0.00 tỷ" && diff_value == "0.00 tỷ"
+    # Filter data by current date and calculate totals
+    current_date_data = data.select { |item| item["tradingDate"] == current_date }
 
-    "Mua: `#{buy_value}`, Bán: `#{sell_value}`, Dif: `#{diff_value}` (#{Date.today.strftime('%b/%d')})"
+    # If no data for current date, use the first 5 records (most recent date)
+    if current_date_data.empty?
+      # Take first 5 records from the sorted response (most recent date)
+      recent_data = data.first(5)
+      return nil if recent_data.empty?
+
+      # Use the date from the first record as the actual date
+      actual_date = recent_data.first["tradingDate"]
+
+      # Calculate totals for the most recent date
+      total_buy_val = recent_data.sum { |item| item["buyVal"] || 0 }
+      total_sell_val = recent_data.sum { |item| item["sellVal"] || 0 }
+      total_net_val = recent_data.sum { |item| item["netVal"] || 0 }
+    else
+      # Use current date data
+      actual_date = current_date
+      total_buy_val = current_date_data.sum { |item| item["buyVal"] || 0 }
+      total_sell_val = current_date_data.sum { |item| item["sellVal"] || 0 }
+      total_net_val = current_date_data.sum { |item| item["netVal"] || 0 }
+    end
+
+    # Convert to billions VND
+    buy_billion = convert_to_vnd_billion(total_buy_val)
+    sell_billion = convert_to_vnd_billion(total_sell_val)
+    net_billion = convert_to_vnd_billion(total_net_val)
+
+    # Format output for Slack
+    net_prefix = total_net_val >= 0 ? "+" : ""
+    formatted_date = Date.parse(actual_date).strftime("%b/%d")
+    "Mua: `#{buy_billion}`, Bán: `#{sell_billion}`, Ròng: `#{net_prefix}#{net_billion}` (#{formatted_date})"
+  rescue StandardError => e
+    puts "Error fetching foreign transaction data: #{e}"
+    nil
+  end
+end
+
+class ProprietaryTradingFetcher < FinancialDataFetcher
+  def fetch_data
+    # Get current date in YYYY-MM-DD format
+    start_date = (Date.today - 10).strftime("%Y-%m-%d")
+    current_date = Date.today.strftime("%Y-%m-%d")
+
+    # Build the API URL with proper date range
+    @url = "https://api-finfo.vndirect.com.vn/v4/proprietary_trading?q=code:HNX,VNINDEX,UPCOM~date:gte:#{start_date}~date:lte:#{current_date}&sort=date:desc&size=600"
+
+    headers = HEADERS.merge({
+      'sec-ch-ua-platform' => '"macOS"',
+      'Referer' => 'https://dstock.vndirect.com.vn/',
+      'Content-Type' => 'application/json',
+      'sec-ch-ua' => '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+      'sec-ch-ua-mobile' => '?0'
+    })
+
+    uri = URI.parse(@url)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = (uri.scheme == "https")
+
+    request = Net::HTTP::Get.new(uri.request_uri, headers)
+    response = http.request(request)
+
+    return nil unless response.is_a?(Net::HTTPSuccess)
+
+    response_json = JSON.parse(response.body)
+    data = response_json["data"]
+
+    return nil unless data && data.any?
+
+    # Filter data by current date and calculate totals
+    current_date_data = data.select { |item| item["date"] == current_date }
+
+    # If no data for current date, use the first 3 records (most recent date)
+    if current_date_data.empty?
+      # Take first 3 records from the sorted response (most recent date)
+      recent_data = data.first(3)
+      return nil if recent_data.empty?
+
+      # Use the date from the first record as the actual date
+      actual_date = recent_data.first["date"]
+
+      # Calculate totals for the most recent date
+      total_buying_val = recent_data.sum { |item| item["buyingVal"] || 0 }
+      total_selling_val = recent_data.sum { |item| item["sellingVal"] || 0 }
+      total_net_val = recent_data.sum { |item| item["netVal"] || 0 }
+    else
+      # Use current date data
+      actual_date = current_date
+      total_buying_val = current_date_data.sum { |item| item["buyingVal"] || 0 }
+      total_selling_val = current_date_data.sum { |item| item["sellingVal"] || 0 }
+      total_net_val = current_date_data.sum { |item| item["netVal"] || 0 }
+    end
+
+    # Convert to billions VND
+    buying_billion = convert_to_vnd_billion(total_buying_val)
+    selling_billion = convert_to_vnd_billion(total_selling_val)
+    net_billion = convert_to_vnd_billion(total_net_val)
+
+    # Format output for Slack
+    net_prefix = total_net_val >= 0 ? "+" : ""
+    formatted_date = Date.parse(actual_date).strftime("%b/%d")
+    "Mua: `#{buying_billion}`, Bán: `#{selling_billion}`, Ròng: `#{net_prefix}#{net_billion}` (#{formatted_date})"
+  rescue StandardError => e
+    puts "Error fetching proprietary trading data: #{e}"
+    nil
   end
 end
 
@@ -389,6 +513,7 @@ def run_market_update(slack_token, slack_channel)
     "Gold Price" => TradingEconomicsFetcher.new(URLS["Gold Price"], "XAUUSD:CUR"),
     "VN Gold Prices" => VietnamGoldFetcher.new(URLS["VN Gold Prices"]),
     "GD NDT NN" => ForeignTransactionFetcher.new(URLS["GD NDT NN"]),
+    "Tự doanh" => ProprietaryTradingFetcher.new(URLS["Tự doanh"]),
     "VNINDEX" => VnindexFetcher.new(URLS["VNINDEX"]),
     "VNINDEX P/E" => VnindexPEFetcher.new(URLS["VNINDEX P/E"]),
     "DXY" => TradingEconomicsFetcher.new(URLS["DXY"], "DXY:CUR"),
