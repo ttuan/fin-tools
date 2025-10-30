@@ -132,7 +132,7 @@ class MarketReportFetcher < FinancialDataFetcher
     today_date = Date.today.strftime("%d/%m/%Y")
     link = nil
 
-    soup.css('.row .story__header').each do |header|
+    soup.css('.story__header').each do |header|
       meta_time = header.at_css('.story__meta time')
 
       if meta_time && meta_time.text.include?(today_date)
@@ -172,7 +172,7 @@ class MarketReportFetcher < FinancialDataFetcher
     money_market_section = new_soup.at_xpath("//ul[li[contains(normalize-space(.), 'MONEY MARKET')]]")
 
     if money_market_section
-      next_p = money_market_section.at_xpath("following-sibling::p[1]")
+      next_p = money_market_section.at_xpath("following-sibling::p[2]")
       image = next_p.at_css("img") if next_p
       return image['src'] if image
     end
