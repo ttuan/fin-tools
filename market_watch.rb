@@ -130,7 +130,7 @@ class MarketReportFetcher < FinancialDataFetcher
     today_date = Date.today.strftime("%d/%m/%Y")
     link = nil
 
-    soup.css('.story__header').each do |header|
+    soup.css('.row .story__header').each do |header|
       meta_time = header.at_css('.story__meta time')
 
       if meta_time && meta_time.text.include?(today_date)
@@ -383,17 +383,17 @@ end
 
 def run_market_update(slack_token, slack_channel)
   fetchers = {
-    "US10Y" => TradingEconomicsFetcher.new(URLS["US10Y"], "USGG10YR:IND"),
-    "VN10Y" => TradingEconomicsFetcher.new(URLS["VN10Y"], "VNMGOVBON10Y:GOV"),
-    "Brent Oil" => TradingEconomicsFetcher.new(URLS["Brent Oil"], "CO1:COM"),
-    "Gold Price" => TradingEconomicsFetcher.new(URLS["Gold Price"], "XAUUSD:CUR"),
-    "VN Gold Prices" => VietnamGoldFetcher.new(URLS["VN Gold Prices"]),
-    "GD NDT NN" => ForeignTransactionFetcher.new(URLS["GD NDT NN"]),
-    "VNINDEX" => VnindexFetcher.new(URLS["VNINDEX"]),
-    "VNINDEX P/E" => VnindexPEFetcher.new(URLS["VNINDEX P/E"]),
-    "DXY" => TradingEconomicsFetcher.new(URLS["DXY"], "DXY:CUR"),
-    "VN1Y" => Vietnam1YBondFetcher.new(URLS["VN1Y"]),
-    "USDVND" => TradingEconomicsFetcher.new(URLS["USDVND"], "USDVND:CUR"),
+    # "US10Y" => TradingEconomicsFetcher.new(URLS["US10Y"], "USGG10YR:IND"),
+    # "VN10Y" => TradingEconomicsFetcher.new(URLS["VN10Y"], "VNMGOVBON10Y:GOV"),
+    # "Brent Oil" => TradingEconomicsFetcher.new(URLS["Brent Oil"], "CO1:COM"),
+    # "Gold Price" => TradingEconomicsFetcher.new(URLS["Gold Price"], "XAUUSD:CUR"),
+    # "VN Gold Prices" => VietnamGoldFetcher.new(URLS["VN Gold Prices"]),
+    # "GD NDT NN" => ForeignTransactionFetcher.new(URLS["GD NDT NN"]),
+    # "VNINDEX" => VnindexFetcher.new(URLS["VNINDEX"]),
+    # "VNINDEX P/E" => VnindexPEFetcher.new(URLS["VNINDEX P/E"]),
+    # "DXY" => TradingEconomicsFetcher.new(URLS["DXY"], "DXY:CUR"),
+    # "VN1Y" => Vietnam1YBondFetcher.new(URLS["VN1Y"]),
+    # "USDVND" => TradingEconomicsFetcher.new(URLS["USDVND"], "USDVND:CUR"),
     "ON" => MarketReportFetcher.new(URLS["ON"])
   }
 
